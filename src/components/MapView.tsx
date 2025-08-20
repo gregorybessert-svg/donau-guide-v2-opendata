@@ -1,51 +1,54 @@
 import React, { useEffect, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Popup, GeoJSON, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { useAppStore } from '../store'
-import '../lib/leaflet-fix'
-import { computeKm, loadJSON } from './computeKm'
-import { useGps } from '../lib/useGps'
 
-type DonauLine = GeoJSON.Feature<GeoJSON.LineString, {km_start:number, km_end:number}>
+type DonauLine = GeoJSON.Feature<GeoJSON.LineString, { km_start: number, km_end: number }>
 
-function KmUpdater({ line }:{ line: DonauLine | null }){
-  const pos = useAppStore(s=>s.position)
-  const setKm = useAppStore(s=>s.setKm)
-  useEffect(()=>{
-    if(!line || !pos) { setKm(null); return }
-    const km = computeKm(line, [pos.lon, pos.lat])
-    setKm(km)
-  },[line, pos, setKm])
-  return null
-}
-
-function FitAustriaOnce(){
+// Hilfskomponente: zoomt automatisch auf die Linie
+function FitToLine({ line }: { line: DonauLine | null }) {
   const map = useMap()
-  useEffect(()=>{
-    map.fitBounds(L.latLngBounds([[48.51,13.73],[48.14,17.06]]).pad(0.2))
-  },[map])
+  useEffect(() => {
+    if (line) {
+      const coords = line.geometry.coordinates.map(c => [c[1], c[0]]) // [lat, lon]
+      map.fitBounds(L.latLngBounds(coords).pad(0.2))
+    }
+  }, [line, map])
   return null
 }
 
-export default function MapView(){
-  const pos = useAppStore(s=>s.position)
+export default function MapView() {
   const [line, setLine] = useState<DonauLine | null>(null)
-  useGps()
 
-  useEffect(()=>{
-    loadJSON<DonauLine>('/donau_line_demo.geojson').then(setLine).catch(()=> setLine(null))
-  },[])
+  // Demo-GeoJSON laden
+  useEffect(() => {
+    fetch('/donau_line_demo.geojson')
+      .then(res => res.json())
+      .then(setLine)
+      .catch(() => setLine(null))
+  }, [])
 
   return (
-    <MapContainer className="leaflet-container" style={{height:'100%', width:'100%'}} center={[48.224, 14.872]} zoom={8}>
+    <MapContainer
+      className="leaflet-container"
+      style={{ height: '100%', width: '100%' }}
+      center={[48.21, 16.37]} // Fallback (Wien)
+      zoom={8}                // Fallback-Zoom, wird durch FitToLine überschrieben
+    >
       <TileLayer
         attribution='&copy; OpenStreetMap contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        crossOrigin=""
       />
-      {line && <GeoJSON data={line as any} style={{ color:'#38bdf8', weight:3 }} />}
-      {pos && <Marker position={[pos.lat, pos.lon]}><Popup>Dein Standort</Popup></Marker>}
-      <KmUpdater line={line} />
-      <FitAustriaOnce />
+      {line && (
+        <>
+          <GeoJSON data={line as any} style={{ color: '#38bdf8', weight: 3 }} />
+          <FitToLine line={line} />
+        </>
+      )}
+      {/* Testmarker, kannst du später entfernen */}
+      <Marker position={[48.4760, 13.8865]}>
+        <Popup>Untermühl (Testmarker)</Popup>
+      </Marker>
     </MapContainer>
   )
 }
