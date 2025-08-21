@@ -1,26 +1,30 @@
-import * as turf from '@turf/turf'
-
-export async function loadJSON<T=any>(path:string): Promise<T>{
-  const res = await fetch(path)
-  if(!res.ok) throw new Error(`Failed to load ${path}`)
-  return res.json()
-}
+import * as turf from "@turf/turf";
+import { point, Position } from "@turf/helpers";
 
 export function computeKm(
-  donauLine: GeoJSON.Feature<GeoJSON.LineString, { km_start:number, km_end:number }>,
-  user: turf.helpers.Position
-): number | null {
-  try{
-    const start = turf.point(donauLine.geometry.coordinates[0] as turf.helpers.Position)
-    const snapped = turf.nearestPointOnLine(donauLine as any, user, {units:'kilometers'}) as any
-    const sliced = turf.lineSlice(start, snapped, donauLine as any) as any
-    const progressKm = turf.length(sliced, {units:'kilometers'})
-    const totalKm = turf.length(donauLine as any, {units:'kilometers'})
-    const ratio = totalKm === 0 ? 0 : (progressKm / totalKm)
-    const { km_start, km_end } = donauLine.properties!
-    const km = km_start + ratio * (km_end - km_start)
-    return Math.round(km * 10) / 10
-  }catch(_e){
-    return null
-  }
+  donauLine: turf.Feature<turf.LineString>,
+  user: Position
+) {
+  // Erstes und letztes Koordinatenpaar der Donau-Linie
+  const start = point(donauLine.geometry.coordinates[0] as Position);
+  const end = point(
+    donauLine.geometry.coordinates[
+      donauLine.geometry.coordinates.length - 1
+    ] as Position
+  );
+
+  // Distanz entlang der Linie berechnen
+  const line = turf.lineString(donauLine.geometry.coordinates);
+
+  // Punkt des Users
+  const userPoint = point(user);
+
+  // Projektion: der Punkt des Users auf die Linie
+  const snapped = turf.nearestPointOnLine(line, userPoint);
+
+  // Länge entlang der Linie (von Start bis zur Projektion)
+  const lineSlice = turf.lineSlice(start, snapped, line);
+  const distKm = turf.length(lineSlice, { units: "kilometers" });
+
+  return distKm; // 👈 gibt km zurück
 }

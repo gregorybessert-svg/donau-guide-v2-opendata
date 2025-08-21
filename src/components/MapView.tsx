@@ -736,6 +736,13 @@ export default function MapView() {
             </div>
           </LayersControl.Overlay>
         </LayersControl>
+        {/* 📍 Recenter innerhalb des MapContainer, damit useMap() funktioniert */}
+        <div
+          className="leaflet-bottom leaflet-right"
+          style={{ position: "absolute", right: 10, bottom: 50, zIndex: 1200 }}
+        >
+          <RecenterButton />
+        </div>
       </MapContainer>
 
       {/* Info‑Panel */}
