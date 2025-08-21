@@ -38,12 +38,18 @@ type GpsFix = {
   timestamp: number;
 };
 
-function useGps(options: {
-  enableHighAccuracy?: boolean;
-  maxAgeMs?: number;
-  timeoutMs?: number;
-} = {}) {
-  const { enableHighAccuracy = true, maxAgeMs = 5000, timeoutMs = 10000 } = options;
+function useGps(
+  options: {
+    enableHighAccuracy?: boolean;
+    maxAgeMs?: number;
+    timeoutMs?: number;
+  } = {}
+) {
+  const {
+    enableHighAccuracy = true,
+    maxAgeMs = 5000,
+    timeoutMs = 10000,
+  } = options;
   const [fix, setFix] = useState<GpsFix | null>(null);
   const [error, setError] = useState<string | null>(null);
   const watchId = useRef<number | null>(null);
@@ -70,7 +76,8 @@ function useGps(options: {
       { enableHighAccuracy, maximumAge: maxAgeMs, timeout: timeoutMs }
     );
     return () => {
-      if (watchId.current !== null) navigator.geolocation.clearWatch(watchId.current);
+      if (watchId.current !== null)
+        navigator.geolocation.clearWatch(watchId.current);
     };
   }, [enableHighAccuracy, maxAgeMs, timeoutMs]);
 
@@ -89,10 +96,12 @@ function GpsMarker() {
             <strong>Deine Position</strong>
             <br />
             {fix.lat.toFixed(5)}, {fix.lng.toFixed(5)}
-            <br />Genauigkeit: ±{Math.round(fix.accuracy)} m
+            <br />
+            Genauigkeit: ±{Math.round(fix.accuracy)} m
             {fix.speed != null && (
               <>
-                <br />Geschwindigkeit: {Math.round(fix.speed)} m/s
+                <br />
+                Geschwindigkeit: {Math.round(fix.speed)} m/s
               </>
             )}
           </div>
@@ -101,6 +110,57 @@ function GpsMarker() {
       <Circle center={pos} radius={Math.max(fix.accuracy, 8)} />
     </>
   );
+}
+// ① Neue Komponente RecenterButton
+function RecenterButton() {
+  const { fix } = useGps();
+  const map = useMap();
+
+  const recenter = () => {
+    if (!fix || typeof fix.lat !== "number" || typeof fix.lng !== "number") {
+      alert("Noch keine gültige GPS-Position verfügbar.");
+      return;
+    }
+    map.setView([fix.lat, fix.lng], Math.max(map.getZoom(), 14), {
+      animate: true,
+    });
+  };
+
+  return (
+    <button
+      onClick={recenter}
+      style={{
+        background: "#111",
+        color: "#fff",
+        border: "1px solid #333",
+        borderRadius: 10,
+        padding: "8px 10px",
+        cursor: "pointer",
+      }}
+      title="Auf meine Position zentrieren"
+      disabled={!fix}
+    >
+      📍
+    </button>
+  );
+}
+
+// =====================
+// Map beim ersten GPS‑Fix automatisch zentrieren
+// =====================
+function FollowMyLocationOnce() {
+  const { fix } = useGps();
+  const map = useMap();
+  const didCenter = useRef(false);
+
+  useEffect(() => {
+    if (!fix || didCenter.current) return;
+    didCenter.current = true;
+    const pos = L.latLng(fix.lat, fix.lng);
+    map.setView(pos, Math.max(map.getZoom(), 14), { animate: true });
+  }, [fix, map]);
+
+  return null;
 }
 
 // =====================
@@ -150,17 +210,18 @@ function ViadonauWms({
 // =====================
 type Selection = { title: string; lines: string[] } | null;
 
-function InfoPanel({ currentKm, selection, legend }: {
+function InfoPanel({
+  currentKm,
+  selection,
+  legend,
+}: {
   currentKm?: number | null;
   selection: Selection;
   legend: Array<{ label: string; symbol: string }>;
 }) {
   return (
     <aside
-      className={classNames(
-        "dg-info-panel",
-        "leaflet-top leaflet-left"
-      )}
+      className={classNames("dg-info-panel", "leaflet-top leaflet-left")}
       style={{ position: "absolute", zIndex: 1000, margin: 10 }}
     >
       <div
@@ -176,9 +237,9 @@ function InfoPanel({ currentKm, selection, legend }: {
         }}
       >
         <h3 style={{ margin: ".25rem 0", fontSize: 15 }}>📏 Flusskilometer</h3>
-        <div style={{ marginBottom: ".5rem" }}>{
-          typeof currentKm === "number" ? `km ${currentKm.toFixed(1)}` : "–"
-        }</div>
+        <div style={{ marginBottom: ".5rem" }}>
+          {typeof currentKm === "number" ? `km ${currentKm.toFixed(1)}` : "–"}
+        </div>
 
         <h3 style={{ margin: ".25rem 0", fontSize: 15 }}>ℹ️ Info</h3>
         <div style={{ marginBottom: ".5rem" }}>
@@ -223,12 +284,20 @@ function usePersistentBool(key: string, initial: boolean) {
     }
   });
   useEffect(() => {
-    try { localStorage.setItem(key, String(state)); } catch {}
+    try {
+      localStorage.setItem(key, String(state));
+    } catch {}
   }, [key, state]);
   return [state, setState] as const;
 }
 
-function Disclaimer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function Disclaimer({
+  visible,
+  onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
   if (!visible) return null;
   return (
     <div style={{ position: "absolute", left: 10, bottom: 10, zIndex: 1200 }}>
@@ -245,19 +314,36 @@ function Disclaimer({ visible, onClose }: { visible: boolean; onClose: () => voi
           boxShadow: "0 4px 12px rgba(0,0,0,.35)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 10,
+          }}
+        >
           <strong>Hinweis</strong>
           <button
             onClick={onClose}
             aria-label="Disclaimer schließen"
-            style={{ background: "transparent", color: "#fff", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+            style={{
+              background: "transparent",
+              color: "#fff",
+              border: "none",
+              cursor: "pointer",
+              fontSize: 18,
+              lineHeight: 1,
+            }}
           >
             ×
           </button>
         </div>
         <div>
-          IENC‑WMS dient nur zu Planungs‑/Informationszwecken und ist <b>nicht zur Navigation</b> geeignet.
-          <br />Quelle: viadonau / D4D‑Portal (CC BY 4.0). Fahrwassergebiet (WMS): Quelle viadonau.
+          IENC‑WMS dient nur zu Planungs‑/Informationszwecken und ist{" "}
+          <b>nicht zur Navigation</b> geeignet.
+          <br />
+          Quelle: viadonau / D4D‑Portal (CC BY 4.0). Fahrwassergebiet (WMS):
+          Quelle viadonau.
         </div>
       </div>
     </div>
@@ -267,7 +353,11 @@ function Disclaimer({ visible, onClose }: { visible: boolean; onClose: () => voi
 // =====================
 // Demo‑GeoJSON (Linie) mit Fit‑to‑Bounds + Click‑Info
 // =====================
-function DonauDemoLine({ url, onSelect, onKm }: {
+function DonauDemoLine({
+  url,
+  onSelect,
+  onKm,
+}: {
   url: string;
   onSelect: (s: Selection) => void;
   onKm: (km: number | null) => void;
@@ -284,7 +374,8 @@ function DonauDemoLine({ url, onSelect, onKm }: {
     if (!data) return;
     const geo = L.geoJSON(data as any);
     const b = geo.getBounds();
-    if (b.isValid()) map.fitBounds(b as LatLngBoundsExpression, { padding: [20, 20] });
+    if (b.isValid())
+      map.fitBounds(b as LatLngBoundsExpression, { padding: [20, 20] });
   }, [data, map]);
 
   if (!data) return null;
@@ -312,7 +403,10 @@ function DonauDemoLine({ url, onSelect, onKm }: {
               ? `km ${p.km_start} – ${p.km_end}`
               : ""
           }`;
-          L.popup().setLatLng((e as any).latlng).setContent(content).openOn(map);
+          L.popup()
+            .setLatLng((e as any).latlng)
+            .setContent(content)
+            .openOn(map);
         });
       }}
     />
@@ -359,7 +453,12 @@ function readCapCache(url: string) {
   try {
     const raw = localStorage.getItem(capCacheKey(url));
     if (!raw) return null;
-    const obj = JSON.parse(raw) as { etag?: string; lastModified?: string; xml?: string; ts?: number };
+    const obj = JSON.parse(raw) as {
+      etag?: string;
+      lastModified?: string;
+      xml?: string;
+      ts?: number;
+    };
     if (!obj || !obj.xml || !obj.ts) return null;
     if (Date.now() - obj.ts > CAP_TTL_MS) return null; // abgelaufen
     return obj;
@@ -368,19 +467,26 @@ function readCapCache(url: string) {
   }
 }
 
-function writeCapCache(url: string, data: { etag?: string; lastModified?: string; xml: string }) {
+function writeCapCache(
+  url: string,
+  data: { etag?: string; lastModified?: string; xml: string }
+) {
   try {
     localStorage.setItem(
       capCacheKey(url),
       JSON.stringify({ ...data, ts: Date.now() })
     );
-  } catch {/* ignore quota errors */}
+  } catch {
+    /* ignore quota errors */
+  }
 }
 
 function normalizeCapUrl(capUrl: string) {
   return capUrl.includes("Request=GetCapabilities")
     ? capUrl
-    : capUrl + (capUrl.includes("?") ? "&" : "?") + "SERVICE=WMS&Request=GetCapabilities";
+    : capUrl +
+        (capUrl.includes("?") ? "&" : "?") +
+        "SERVICE=WMS&Request=GetCapabilities";
 }
 
 async function fetchCapabilitiesWithCache(capUrl: string) {
@@ -416,7 +522,9 @@ function parseWmsLayers(xmlText: string) {
   const doc = new DOMParser().parseFromString(xmlText, "application/xml");
   const layerEls = Array.from(doc.querySelectorAll("Capability Layer Layer"));
   // Fallback: wenn Struktur anders ist, alle Layer-Elemente durchsuchen
-  const all = layerEls.length ? layerEls : Array.from(doc.querySelectorAll("Layer"));
+  const all = layerEls.length
+    ? layerEls
+    : Array.from(doc.querySelectorAll("Layer"));
   const layers = all
     .map((el) => ({
       name: el.querySelector("Name")?.textContent?.trim() || "",
@@ -443,12 +551,17 @@ export default function MapView() {
   const [currentKm, setCurrentKm] = useState<number | null>(null);
   const [showWms, setShowWms] = usePersistentBool("dg:wms:visible", false); // Default: aus
   const [showIenc, setShowIenc] = usePersistentBool("dg:ienc:visible", true); // Default: an
-  const [showDisclaimer, setShowDisclaimer] = usePersistentBool("dg:disclaimer:visible", true);
+  const [showDisclaimer, setShowDisclaimer] = usePersistentBool(
+    "dg:disclaimer:visible",
+    true
+  );
 
   // WMS Layer Auswahl (viadonau Fahrwassergebiet)
   const wmsCapUrl =
     "https://haleconnect.com/ows/services/org.1141.b5f62a22-925d-46f6-a7e2-f763ef489068_wms?SERVICE=WMS&Request=GetCapabilities";
-  const [wmsLayers, setWmsLayers] = useState<Array<{ name: string; title: string }>>([]);
+  const [wmsLayers, setWmsLayers] = useState<
+    Array<{ name: string; title: string }>
+  >([]);
   const [wmsSelected, setWmsSelected] = useState<string>("");
   const [wmsLoading, setWmsLoading] = useState<boolean>(false);
   const [wmsError, setWmsError] = useState<string | null>(null);
@@ -465,15 +578,20 @@ export default function MapView() {
         const PREF_WMS = ["Fairway Area Default Style"]; // gewünschter Standard
         const saved = localStorage.getItem("dg:wms:layer") || "";
 
-        const fromSaved = layers.find((l) => l.name === saved || l.title === saved);
+        const fromSaved = layers.find(
+          (l) => l.name === saved || l.title === saved
+        );
         const fromPref = layers.find((l) =>
-          PREF_WMS.some((p) =>
-            (l.title ?? "").toLowerCase() === p.toLowerCase() ||
-            (l.name ?? "").toLowerCase() === p.toLowerCase()
+          PREF_WMS.some(
+            (p) =>
+              (l.title ?? "").toLowerCase() === p.toLowerCase() ||
+              (l.name ?? "").toLowerCase() === p.toLowerCase()
           )
         );
         const fromHeuristic = layers.find((l) =>
-          /fahrwasser|fairway|fahrwassergebiet/i.test(`${l.name ?? ""} ${l.title ?? ""}`)
+          /fahrwasser|fairway|fahrwassergebiet/i.test(
+            `${l.name ?? ""} ${l.title ?? ""}`
+          )
         );
 
         const pick = fromSaved || fromPref || fromHeuristic || layers[0];
@@ -493,7 +611,9 @@ export default function MapView() {
   // IENC (D4D) – Capabilities States & Laden
   const iencCapUrl =
     "https://service.d4d-portal.info/at/wms?SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.3.0";
-  const [iencLayers, setIencLayers] = useState<Array<{ name: string; title: string }>>([]);
+  const [iencLayers, setIencLayers] = useState<
+    Array<{ name: string; title: string }>
+  >([]);
   const [iencSelected, setIencSelected] = useState<string>("");
   const [iencLoading, setIencLoading] = useState<boolean>(false);
   const [iencError, setIencError] = useState<string | null>(null);
@@ -510,11 +630,14 @@ export default function MapView() {
         const PREF_IENC = ["d4dmap"]; // gewünschter Standard
         const saved = localStorage.getItem("dg:ienc:layer") || "";
 
-        const fromSaved = layers.find((l) => l.name === saved || l.title === saved);
+        const fromSaved = layers.find(
+          (l) => l.name === saved || l.title === saved
+        );
         const fromPref = layers.find((l) =>
-          PREF_IENC.some((p) =>
-            (l.title ?? "").toLowerCase() === p.toLowerCase() ||
-            (l.name ?? "").toLowerCase() === p.toLowerCase()
+          PREF_IENC.some(
+            (p) =>
+              (l.title ?? "").toLowerCase() === p.toLowerCase() ||
+              (l.name ?? "").toLowerCase() === p.toLowerCase()
           )
         );
         const fromHeuristic = layers.find((l) =>
@@ -525,7 +648,8 @@ export default function MapView() {
         setIencSelected(pick?.name || "");
         setIencError(null);
       } catch (e: any) {
-        if (!cancelled) setIencError(e?.message || "IENC Capabilities nicht ladbar");
+        if (!cancelled)
+          setIencError(e?.message || "IENC Capabilities nicht ladbar");
       } finally {
         if (!cancelled) setIencLoading(false);
       }
@@ -548,22 +672,38 @@ export default function MapView() {
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
-      <MapContainer center={center} zoom={12} style={{ width: "100%", height: "100%", background: "#e5e5e5" }}>
+      <MapContainer
+        center={center}
+        zoom={12}
+        style={{ width: "100%", height: "100%", background: "#e5e5e5" }}
+      >
         <ScaleControl position="bottomleft" />
-
+        <FollowMyLocationOnce />
         <LayersControl position="topright">
           {/* Basiskarten */}
           <LayersControl.BaseLayer checked name="OSM Standard">
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OpenStreetMap contributors" crossOrigin />
+            <TileLayer
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenStreetMap contributors"
+              crossOrigin
+            />
           </LayersControl.BaseLayer>
           <LayersControl.BaseLayer name="OpenTopo">
-            <TileLayer url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png" attribution="&copy; OpenTopoMap" crossOrigin />
+            <TileLayer
+              url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+              attribution="&copy; OpenTopoMap"
+              crossOrigin
+            />
           </LayersControl.BaseLayer>
 
           {/* Overlays */}
           <LayersControl.Overlay checked name="Donau Demo‑Linie">
             <div>
-              <DonauDemoLine url="/donau_line_demo.geojson" onSelect={setSelection} onKm={setCurrentKm} />
+              <DonauDemoLine
+                url="/donau_line_demo.geojson"
+                onSelect={setSelection}
+                onKm={setCurrentKm}
+              />
             </div>
           </LayersControl.Overlay>
 
@@ -581,7 +721,12 @@ export default function MapView() {
 
           <LayersControl.Overlay name="IENC (D4D WMS)">
             <div>
-              <ViadonauWms visible={showIenc} url="https://service.d4d-portal.info/at/wms" layers={iencSelected} version="1.3.0" />
+              <ViadonauWms
+                visible={showIenc}
+                url="https://service.d4d-portal.info/at/wms"
+                layers={iencSelected}
+                version="1.3.0"
+              />
             </div>
           </LayersControl.Overlay>
 
@@ -597,12 +742,28 @@ export default function MapView() {
       <InfoPanel currentKm={currentKm} selection={selection} legend={legend} />
 
       {/* WMS Controls (rechts unten) */}
-      <div style={{ position: "absolute", right: 10, bottom: 10, zIndex: 1100 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <div
+        style={{ position: "absolute", right: 10, bottom: 10, zIndex: 1100 }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           {/* viadonau WMS */}
           <button
             onClick={() => setShowWms((v) => !v)}
-            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
+            style={{
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: "8px 10px",
+              cursor: "pointer",
+            }}
             title="WMS Fahrwasser ein/aus"
           >
             {showWms ? "WMS: an" : "WMS: aus"}
@@ -613,13 +774,23 @@ export default function MapView() {
             onChange={(e) => {
               const v = e.target.value;
               setWmsSelected(v);
-              try { localStorage.setItem("dg:wms:layer", v); } catch {}
+              try {
+                localStorage.setItem("dg:wms:layer", v);
+              } catch {}
             }}
-            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px" }}
+            style={{
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
             title={wmsError ? `Fehler: ${wmsError}` : "WMS-Layer wählen"}
           >
             {wmsLoading && <option>lädt…</option>}
-            {!wmsLoading && wmsLayers.length === 0 && <option>keine Layer</option>}
+            {!wmsLoading && wmsLayers.length === 0 && (
+              <option>keine Layer</option>
+            )}
             {!wmsLoading &&
               wmsLayers.map((l) => (
                 <option key={l.name} value={l.name}>
@@ -631,7 +802,14 @@ export default function MapView() {
           {/* IENC (D4D) */}
           <button
             onClick={() => setShowIenc((v) => !v)}
-            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
+            style={{
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: "8px 10px",
+              cursor: "pointer",
+            }}
             title="IENC WMS ein/aus"
           >
             {showIenc ? "IENC: an" : "IENC: aus"}
@@ -642,13 +820,23 @@ export default function MapView() {
             onChange={(e) => {
               const v = e.target.value;
               setIencSelected(v);
-              try { localStorage.setItem("dg:ienc:layer", v); } catch {}
+              try {
+                localStorage.setItem("dg:ienc:layer", v);
+              } catch {}
             }}
-            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px" }}
+            style={{
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: "8px 10px",
+            }}
             title={iencError ? `Fehler: ${iencError}` : "IENC-Layer wählen"}
           >
             {iencLoading && <option>lädt…</option>}
-            {!iencLoading && iencLayers.length === 0 && <option>keine Layer</option>}
+            {!iencLoading && iencLayers.length === 0 && (
+              <option>keine Layer</option>
+            )}
             {!iencLoading &&
               iencLayers.map((l) => (
                 <option key={l.name} value={l.name}>
@@ -660,16 +848,31 @@ export default function MapView() {
           {/* Info Toggle */}
           <button
             onClick={() => setShowDisclaimer((v: boolean) => !v)}
-            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
+            style={{
+              background: "#111",
+              color: "#fff",
+              border: "1px solid #333",
+              borderRadius: 10,
+              padding: "8px 10px",
+              cursor: "pointer",
+            }}
             title="Disclaimer ein-/ausblenden"
           >
             ℹ︎
           </button>
+          {/* 📍 Neuer Button hier einfügen */}
+          {/*  <RecenterButton />*/}
         </div>
+        {/* 👉 Neuer Button auch nicht !!!hier */}
+        {/*<RecenterButton />*/}
       </div>
-
+      {/* 👉 Neuer Button auch nicht !!!hier */}
+      {/*<RecenterButton />*/}
       {/* Disclaimer unten links */}
-      <Disclaimer visible={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
+      <Disclaimer
+        visible={showDisclaimer}
+        onClose={() => setShowDisclaimer(false)}
+      />
     </div>
   );
 }
