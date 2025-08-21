@@ -104,7 +104,7 @@ function GpsMarker() {
 }
 
 // =====================
-// Viadonau WMS Overlay (Leaflet WMS)
+// Viadonau/D4D WMS Overlay (Leaflet WMS)
 // =====================
 function ViadonauWms({
   url = "https://haleconnect.com/ows/services/org.1141.b5f62a22-925d-46f6-a7e2-f763ef489068_wms",
@@ -113,6 +113,7 @@ function ViadonauWms({
   transparent = true,
   visible = true,
   zIndex = 400,
+  version,
 }: {
   url?: string;
   layers?: string;
@@ -120,6 +121,7 @@ function ViadonauWms({
   transparent?: boolean;
   visible?: boolean;
   zIndex?: number;
+  version?: "1.3.0" | "1.1.1" | string;
 }) {
   const map = useMap();
 
@@ -129,15 +131,16 @@ function ViadonauWms({
       layers,
       format,
       transparent,
-      attribution: "Quelle: viadonau (WMS)",
+      attribution: "Quelle: viadonau/D4D (WMS)",
       crossOrigin: true,
       zIndex,
+      ...(version ? { version } : {}),
     });
     wms.addTo(map);
     return () => {
       map.removeLayer(wms);
     };
-  }, [map, url, layers, format, transparent, visible, zIndex]);
+  }, [map, url, layers, format, transparent, visible, zIndex, version]);
 
   return null;
 }
@@ -204,6 +207,60 @@ function InfoPanel({ currentKm, selection, legend }: {
         </ul>
       </div>
     </aside>
+  );
+}
+
+// =====================
+// Disclaimer‑Panel (IENC nicht zur Navigation)
+// =====================
+function usePersistentBool(key: string, initial: boolean) {
+  const [state, setState] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(key);
+      return v == null ? initial : v === "true";
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(key, String(state)); } catch {}
+  }, [key, state]);
+  return [state, setState] as const;
+}
+
+function Disclaimer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  if (!visible) return null;
+  return (
+    <div style={{ position: "absolute", left: 10, bottom: 10, zIndex: 1200 }}>
+      <div
+        style={{
+          background: "rgba(17,17,17,.9)",
+          color: "#fff",
+          padding: ".6rem .8rem",
+          borderRadius: 10,
+          border: "1px solid #333",
+          maxWidth: 360,
+          fontSize: 13,
+          lineHeight: 1.35,
+          boxShadow: "0 4px 12px rgba(0,0,0,.35)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <strong>Hinweis</strong>
+          <button
+            onClick={onClose}
+            aria-label="Disclaimer schließen"
+            style={{ background: "transparent", color: "#fff", border: "none", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+        <div>
+          IENC‑WMS dient nur zu Planungs‑/Informationszwecken und ist <b>nicht zur Navigation</b> geeignet.
+          <br />Quelle: viadonau / D4D‑Portal (CC BY 4.0). Fahrwassergebiet (WMS): Quelle viadonau.
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -384,9 +441,11 @@ export default function MapView() {
   // UI‑State
   const [selection, setSelection] = useState<Selection>(null);
   const [currentKm, setCurrentKm] = useState<number | null>(null);
-  const [showWms, setShowWms] = useState<boolean>(true);
+  const [showWms, setShowWms] = usePersistentBool("dg:wms:visible", false); // Default: aus
+  const [showIenc, setShowIenc] = usePersistentBool("dg:ienc:visible", true); // Default: an
+  const [showDisclaimer, setShowDisclaimer] = usePersistentBool("dg:disclaimer:visible", true);
 
-  // WMS Layer Auswahl (automatisch aus Capabilities)
+  // WMS Layer Auswahl (viadonau Fahrwassergebiet)
   const wmsCapUrl =
     "https://haleconnect.com/ows/services/org.1141.b5f62a22-925d-46f6-a7e2-f763ef489068_wms?SERVICE=WMS&Request=GetCapabilities";
   const [wmsLayers, setWmsLayers] = useState<Array<{ name: string; title: string }>>([]);
@@ -402,14 +461,73 @@ export default function MapView() {
         const layers = await fetchWmsLayers(wmsCapUrl);
         if (cancelled) return;
         setWmsLayers(layers);
-        const guess =
-          layers.find((l) => /fahrwasser|fairway|fahrwassergebiet/i.test(l.name + " " + l.title)) || layers[0];
-        setWmsSelected(guess?.name || "");
+
+        const PREF_WMS = ["Fairway Area Default Style"]; // gewünschter Standard
+        const saved = localStorage.getItem("dg:wms:layer") || "";
+
+        const fromSaved = layers.find((l) => l.name === saved || l.title === saved);
+        const fromPref = layers.find((l) =>
+          PREF_WMS.some((p) =>
+            (l.title ?? "").toLowerCase() === p.toLowerCase() ||
+            (l.name ?? "").toLowerCase() === p.toLowerCase()
+          )
+        );
+        const fromHeuristic = layers.find((l) =>
+          /fahrwasser|fairway|fahrwassergebiet/i.test(`${l.name ?? ""} ${l.title ?? ""}`)
+        );
+
+        const pick = fromSaved || fromPref || fromHeuristic || layers[0];
+        setWmsSelected(pick?.name || "");
         setWmsError(null);
       } catch (e: any) {
         if (!cancelled) setWmsError(e?.message || "Capabilities nicht ladbar");
       } finally {
         if (!cancelled) setWmsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // IENC (D4D) – Capabilities States & Laden
+  const iencCapUrl =
+    "https://service.d4d-portal.info/at/wms?SERVICE=WMS&REQUEST=GetCapabilities&VERSION=1.3.0";
+  const [iencLayers, setIencLayers] = useState<Array<{ name: string; title: string }>>([]);
+  const [iencSelected, setIencSelected] = useState<string>("");
+  const [iencLoading, setIencLoading] = useState<boolean>(false);
+  const [iencError, setIencError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setIencLoading(true);
+        const layers = await fetchWmsLayers(iencCapUrl);
+        if (cancelled) return;
+        setIencLayers(layers);
+
+        const PREF_IENC = ["d4dmap"]; // gewünschter Standard
+        const saved = localStorage.getItem("dg:ienc:layer") || "";
+
+        const fromSaved = layers.find((l) => l.name === saved || l.title === saved);
+        const fromPref = layers.find((l) =>
+          PREF_IENC.some((p) =>
+            (l.title ?? "").toLowerCase() === p.toLowerCase() ||
+            (l.name ?? "").toLowerCase() === p.toLowerCase()
+          )
+        );
+        const fromHeuristic = layers.find((l) =>
+          /enc|ienc|chart|karte/i.test(`${l.name ?? ""} ${l.title ?? ""}`)
+        );
+
+        const pick = fromSaved || fromPref || fromHeuristic || layers[0];
+        setIencSelected(pick?.name || "");
+        setIencError(null);
+      } catch (e: any) {
+        if (!cancelled) setIencError(e?.message || "IENC Capabilities nicht ladbar");
+      } finally {
+        if (!cancelled) setIencLoading(false);
       }
     })();
     return () => {
@@ -423,6 +541,7 @@ export default function MapView() {
       { symbol: "——", label: "Donau (Demo‑Linie)" },
       { symbol: "⬤", label: "POI (z. B. Hafen)" },
       { symbol: "▨", label: "Fahrwassergebiet (WMS)" },
+      { symbol: "▥", label: "IENC (WMS)" },
     ],
     []
   );
@@ -460,6 +579,12 @@ export default function MapView() {
             </div>
           </LayersControl.Overlay>
 
+          <LayersControl.Overlay name="IENC (D4D WMS)">
+            <div>
+              <ViadonauWms visible={showIenc} url="https://service.d4d-portal.info/at/wms" layers={iencSelected} version="1.3.0" />
+            </div>
+          </LayersControl.Overlay>
+
           <LayersControl.Overlay checked name="GPS‑Position">
             <div>
               <GpsMarker />
@@ -474,6 +599,7 @@ export default function MapView() {
       {/* WMS Controls (rechts unten) */}
       <div style={{ position: "absolute", right: 10, bottom: 10, zIndex: 1100 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {/* viadonau WMS */}
           <button
             onClick={() => setShowWms((v) => !v)}
             style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
@@ -484,7 +610,11 @@ export default function MapView() {
 
           <select
             value={wmsSelected}
-            onChange={(e) => setWmsSelected(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setWmsSelected(v);
+              try { localStorage.setItem("dg:wms:layer", v); } catch {}
+            }}
             style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px" }}
             title={wmsError ? `Fehler: ${wmsError}` : "WMS-Layer wählen"}
           >
@@ -497,8 +627,49 @@ export default function MapView() {
                 </option>
               ))}
           </select>
+
+          {/* IENC (D4D) */}
+          <button
+            onClick={() => setShowIenc((v) => !v)}
+            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
+            title="IENC WMS ein/aus"
+          >
+            {showIenc ? "IENC: an" : "IENC: aus"}
+          </button>
+
+          <select
+            value={iencSelected}
+            onChange={(e) => {
+              const v = e.target.value;
+              setIencSelected(v);
+              try { localStorage.setItem("dg:ienc:layer", v); } catch {}
+            }}
+            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px" }}
+            title={iencError ? `Fehler: ${iencError}` : "IENC-Layer wählen"}
+          >
+            {iencLoading && <option>lädt…</option>}
+            {!iencLoading && iencLayers.length === 0 && <option>keine Layer</option>}
+            {!iencLoading &&
+              iencLayers.map((l) => (
+                <option key={l.name} value={l.name}>
+                  {l.title || l.name}
+                </option>
+              ))}
+          </select>
+
+          {/* Info Toggle */}
+          <button
+            onClick={() => setShowDisclaimer((v: boolean) => !v)}
+            style={{ background: "#111", color: "#fff", border: "1px solid #333", borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}
+            title="Disclaimer ein-/ausblenden"
+          >
+            ℹ︎
+          </button>
         </div>
       </div>
+
+      {/* Disclaimer unten links */}
+      <Disclaimer visible={showDisclaimer} onClose={() => setShowDisclaimer(false)} />
     </div>
   );
 }
