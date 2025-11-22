@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+/* 
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -9,4 +10,9 @@ export default defineConfig({
       ".csb.app", // Wildcard für alle CodeSandbox-Subdomains
     ],
   },
+});
+*/
+export default defineConfig({
+  plugins: [react()],
+  base: "/donau-guide-v2-opendata/",   // Repo-Name!
 });
