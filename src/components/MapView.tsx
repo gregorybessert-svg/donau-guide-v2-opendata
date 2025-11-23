@@ -739,7 +739,8 @@ export default function MapView() {
       </MapContainer>
 
       {/* Info‑Panel */}
-      <InfoPanel currentKm={currentKm} selection={selection} legend={legend} />
+      {/* Info-Panel vorübergehend deaktiviert, damit Nutzer es nicht sehen */}
+      {/* <InfoPanel currentKm={currentKm} selection={selection} legend={legend} /> */}
 
       {/* WMS Controls (rechts unten) */}
       <div
